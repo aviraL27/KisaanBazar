@@ -4,7 +4,9 @@ import helmet from "helmet";
 import { randomUUID } from "node:crypto";
 import { env } from "./config/env.js";
 import { requestLogger } from "./middleware/requestLogger.js";
+import { authRouter } from "./modules/auth/auth.routes.js";
 import { healthRouter } from "./modules/health/health.routes.js";
+import { listingRouter } from "./modules/listing/listing.routes.js";
 
 export const app = express();
 
@@ -19,3 +21,5 @@ app.use((req, _res, next) => {
 });
 
 app.use("/v1", healthRouter);
+app.use("/v1", authRouter);
+app.use("/v1", listingRouter);
