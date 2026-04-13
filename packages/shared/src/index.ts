@@ -129,3 +129,42 @@ export interface Order {
 export interface PlaceOrderResponse {
   order: Order;
 }
+
+export interface PricePoint {
+  crop: string;
+  mandi: string;
+  state: string;
+  district: string;
+  unit: "kg" | "quintal" | "ton";
+  modalPrice: number;
+  minPrice: number;
+  maxPrice: number;
+  ts: string;
+}
+
+export interface PriceLatestResponse {
+  price: PricePoint;
+  source: "cache" | "db";
+}
+
+export interface PriceHistoryResponse {
+  crop: string;
+  mandi: string;
+  points: PricePoint[];
+}
+
+export interface ManualIngestPriceInput {
+  crop: string;
+  mandi: string;
+  state: string;
+  district: string;
+  unit: "kg" | "quintal" | "ton";
+  modalPrice: number;
+  minPrice: number;
+  maxPrice: number;
+  ts: string;
+}
+
+export interface ManualIngestPricesResponse {
+  insertedCount: number;
+}

@@ -1,4 +1,5 @@
 export const cacheKeys = {
   listingDetail: (id: string) => `kmb:listing:detail:${id}`,
-  listingList: (crop: string, state: string) => `kmb:listing:list:${crop}:${state}`
+  listingList: (crop: string, state: string) => `kmb:listing:list:${crop}:${state}`,
+  priceLatest: (crop: string, mandi: string) => `kmb:price:latest:${crop}:${mandi}`
 };

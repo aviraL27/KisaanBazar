@@ -11,6 +11,7 @@ const EnvSchema = z.object({
   FIREBASE_CLIENT_EMAIL: z.string().email().optional(),
   FIREBASE_PRIVATE_KEY: z.string().min(1).optional(),
   FIREBASE_AUTH_ENFORCED: z.coerce.boolean().default(false),
+  MANDI_API_URL: z.string().url().optional(),
   REDIS_URL: z.string().url().optional(),
   MONGODB_URI: z.string().min(1).optional()
 });
