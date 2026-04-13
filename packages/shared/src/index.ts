@@ -91,3 +91,41 @@ export interface ListListingsResponse {
 export interface ListingDetailResponse {
   listing: Listing;
 }
+
+export type OrderStatus =
+  | "placed"
+  | "confirmed"
+  | "countered"
+  | "rejected"
+  | "shipped"
+  | "delivered"
+  | "disputed"
+  | "cancelled";
+
+export interface PlaceOrderInput {
+  listingId: string;
+  qty: number;
+  idempotencyKey: string;
+}
+
+export interface Order {
+  id: string;
+  buyerId: string;
+  farmerId: string;
+  listingId: string;
+  status: OrderStatus;
+  amountTotal: number;
+  item: {
+    crop: string;
+    qualityGrade: QualityGrade;
+    unit: "kg" | "quintal" | "ton";
+    pricePerUnit: number;
+    qty: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlaceOrderResponse {
+  order: Order;
+}

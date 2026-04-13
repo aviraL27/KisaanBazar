@@ -1,4 +1,4 @@
-import { Schema, model, models, type HydratedDocument, type InferSchemaType, type Model } from "mongoose";
+import mongoose, { Schema, type HydratedDocument, type InferSchemaType, type Model } from "mongoose";
 
 const ListingImageSchema = new Schema(
   {
@@ -55,5 +55,5 @@ type ListingSchemaType = InferSchemaType<typeof ListingSchema>;
 
 export type ListingDocument = HydratedDocument<ListingSchemaType>;
 
-const existingModel = models.Listing as Model<ListingSchemaType> | undefined;
-export const ListingModel: Model<ListingSchemaType> = existingModel ?? model<ListingSchemaType>("Listing", ListingSchema);
+const existingModel = mongoose.models.Listing as Model<ListingSchemaType> | undefined;
+export const ListingModel: Model<ListingSchemaType> = existingModel ?? mongoose.model<ListingSchemaType>("Listing", ListingSchema);

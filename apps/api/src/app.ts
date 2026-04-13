@@ -7,6 +7,7 @@ import { requestLogger } from "./middleware/requestLogger.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
 import { healthRouter } from "./modules/health/health.routes.js";
 import { listingRouter } from "./modules/listing/listing.routes.js";
+import { orderRouter } from "./modules/order/order.routes.js";
 
 export const app = express();
 
@@ -23,3 +24,4 @@ app.use((req, _res, next) => {
 app.use("/v1", healthRouter);
 app.use("/v1", authRouter);
 app.use("/v1", listingRouter);
+app.use("/v1", orderRouter);
