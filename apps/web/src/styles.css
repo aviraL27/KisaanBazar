@@ -5,6 +5,7 @@
   --muted: #5f614f;
   --accent: #5f7d3b;
   --accent-soft: #dce8cc;
+  --accent-deep: #384f1f;
   --line: #e6e1d4;
 }
 
@@ -15,7 +16,10 @@
 body {
   margin: 0;
   font-family: "Noto Sans", "Segoe UI", sans-serif;
-  background: radial-gradient(circle at top right, #f2efdf 0%, var(--bg) 45%);
+  background:
+    radial-gradient(circle at top right, #f2efdf 0%, transparent 45%),
+    radial-gradient(circle at 20% 10%, #e6efd2 0%, transparent 35%),
+    var(--bg);
   color: var(--text);
 }
 
@@ -23,6 +27,30 @@ body {
   border-bottom: 1px solid var(--line);
   background: rgba(255, 253, 248, 0.9);
   backdrop-filter: blur(4px);
+}
+
+.session-bar {
+  margin: 0 auto 1rem;
+  max-width: 960px;
+  padding: 0 1rem;
+  display: grid;
+  gap: 0.8rem;
+  grid-template-columns: 1fr 200px;
+}
+
+.session-bar label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.session-bar input,
+.session-bar select {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.45rem 0.6rem;
 }
 
 nav {
@@ -37,6 +65,13 @@ nav a {
   color: var(--text);
   text-decoration: none;
   font-weight: 600;
+  padding-bottom: 0.2rem;
+  border-bottom: 2px solid transparent;
+}
+
+nav a.active {
+  color: var(--accent-deep);
+  border-color: var(--accent-deep);
 }
 
 .page {
@@ -50,6 +85,17 @@ nav a {
   font-size: clamp(1.8rem, 4vw, 2.8rem);
 }
 
+.hero-home {
+  padding: 1.2rem 1.4rem;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, #f6f2e8, #f0f6e4);
+}
+
+.hero.compact h1 {
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+}
+
 .eyebrow {
   color: var(--accent);
   font-weight: 700;
@@ -60,6 +106,35 @@ nav a {
 .subtitle {
   color: var(--muted);
   max-width: 680px;
+}
+
+.cta-row {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  text-decoration: none;
+  font-weight: 700;
+  border: 0;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--accent-deep);
+  color: #f8fbf2;
+}
+
+.btn-secondary {
+  border: 1px solid var(--accent-deep);
+  color: var(--accent-deep);
 }
 
 .grid {
@@ -78,4 +153,126 @@ nav a {
 
 .card h2 {
   margin-top: 0;
+}
+
+.filters {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+}
+
+.filters label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.filters input,
+.filters select {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+.status {
+  margin: 1rem 0;
+  color: var(--muted);
+}
+
+.status.error {
+  color: #992929;
+}
+
+.listings-grid {
+  margin-top: 1rem;
+}
+
+.listing-card .card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.listing-card p {
+  margin: 0.4rem 0;
+}
+
+.order-actions {
+  margin-top: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.order-actions input {
+  width: 110px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.5rem 0.6rem;
+}
+
+.badge {
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+  font-size: 0.8rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.price {
+  font-size: 1.7rem;
+  margin: 0.5rem 0;
+  color: var(--accent-deep);
+  font-weight: 800;
+}
+
+.sell-form {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+}
+
+.sell-form label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.sell-form input,
+.sell-form select {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.5rem 0.6rem;
+  background: #fff;
+}
+
+@media (max-width: 800px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .sell-form {
+    grid-template-columns: 1fr;
+  }
+
+  .session-bar {
+    grid-template-columns: 1fr;
+  }
+
+  nav {
+    overflow-x: auto;
+    white-space: nowrap;
+  }
 }

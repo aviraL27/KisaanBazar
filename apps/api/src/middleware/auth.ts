@@ -21,6 +21,15 @@ function isRole(value: unknown): value is UserRole {
   return value === "farmer" || value === "buyer" || value === "admin";
 }
 
+function parseDevRoleHeader(header: string | string[] | undefined): UserRole {
+  const raw = Array.isArray(header) ? header[0] : header;
+  if (isRole(raw)) {
+    return raw;
+  }
+
+  return "buyer";
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const token = parseBearerToken(req.headers.authorization);
   if (!token) {
@@ -29,9 +38,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 
   if (!env.FIREBASE_AUTH_ENFORCED) {
+    const role = parseDevRoleHeader(req.headers["x-dev-role"]);
     req.user = {
       uid: "dev-user",
-      role: "buyer"
+      role
     };
     next();
     return;
