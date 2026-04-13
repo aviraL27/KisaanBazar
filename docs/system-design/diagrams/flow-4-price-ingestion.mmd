@@ -1,0 +1,30 @@
+sequenceDiagram
+	autonumber
+	participant CRON as Scheduler
+	participant W as Ingestion Worker
+	participant APIX as Mandi APIs
+	participant M as MongoDB
+	participant R as Redis
+	participant WS as Socket.IO
+
+	CRON->>W: Trigger every 15 min
+	W->>R: SET kmb:lock:ingestion:prices worker1 EX 600 NX
+
+	alt Lock denied
+		R-->>W: null
+		W-->>CRON: skip run (leader exists)
+	else Lock acquired
+		R-->>W: OK
+		W->>APIX: GET mandi prices (HTTPS/JSON)
+		APIX-->>W: raw prices
+		W->>W: normalize + validate
+		W->>M: bulkWrite mandiPrices (Mongo wire)
+		W->>R: HSET kmb:price:latest:* + EXPIRE 900
+		W->>W: compute delta + anomaly
+		W->>R: XADD kmb:stream:price:events anomaly payload
+		W->>WS: broadcast price:anomaly + price:update
+		W->>M: upsert priceSnapshots
+		W->>R: DEL kmb:lock:ingestion:prices
+		W-->>CRON: success metrics
+	end
+

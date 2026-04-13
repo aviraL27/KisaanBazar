@@ -1,0 +1,29 @@
+sequenceDiagram
+	autonumber
+	participant B as Buyer Client
+	participant API as Express API
+	participant R as Redis
+	participant M as MongoDB
+	participant WS as Socket.IO
+
+	B->>API: POST /v1/orders + Idempotency-Key (REST/JSON)
+	API->>R: SET kmb:order:idempotency:{key} pending EX 300 NX
+
+	alt Duplicate key
+		R-->>API: null
+		API-->>B: 409 DUPLICATE_REQUEST
+	else New request
+		R-->>API: OK
+		API->>M: findOne(listing active + quantity)
+		M-->>API: listing doc
+		API->>M: startTransaction
+		API->>M: updateOne listing quantity/version CAS
+		API->>M: insertOne order snapshot
+		API->>M: commitTransaction
+		API->>R: DEL kmb:listing:detail:{listingId}
+		API->>R: PUBLISH kmb:pubsub:orders order.created
+		API->>R: SET kmb:order:idempotency:{key} committed:{orderId} EX 86400
+		API->>WS: emit order:status.changed
+		API-->>B: 201 application/json order
+	end
+

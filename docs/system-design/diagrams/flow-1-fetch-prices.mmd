@@ -1,0 +1,34 @@
+sequenceDiagram
+	autonumber
+	participant C as Client SPA
+	participant API as Express API
+	participant R as Redis
+	participant M as MongoDB
+	participant W as Revalidate Worker
+
+	C->>API: GET /v1/prices/latest?crop=wheat&city=delhi (REST/JSON)
+	API->>API: Validate query (Zod)
+	API->>R: HGETALL kmb:price:latest:wheat:delhi (RESP)
+
+	alt Cache hit fresh
+		R-->>API: Hash payload + ts
+		API-->>C: 200 application/json source=cache
+	else Cache hit stale-within-window
+		R-->>API: Hash payload + old ts
+		API-->>C: 200 application/json source=cache stale=true
+		API->>W: enqueue revalidate(wheat,delhi)
+		W->>M: find().sort({ts:-1}).limit(1) (Mongo wire)
+		W->>R: HSET + EXPIRE 900 (RESP)
+	else Cache miss
+		R-->>API: nil
+		API->>M: find({meta.crop,meta.mandiName}).sort(ts:-1).limit(1)
+		alt Found
+			M-->>API: latest price doc
+			API->>R: HSET kmb:price:latest:wheat:delhi ...
+			API->>R: EXPIRE kmb:price:latest:wheat:delhi 900
+			API-->>C: 200 application/json source=db
+		else Not found
+			M-->>API: empty
+			API-->>C: 404 application/json PRICE_NOT_FOUND
+		end
+	end

@@ -1,0 +1,21 @@
+sequenceDiagram
+	autonumber
+	participant F as Farmer Client
+	participant API as Express API
+	participant FB as Firebase Auth
+	participant M as MongoDB
+	participant R as Redis
+	participant WS as Socket.IO Server
+
+	F->>API: POST /v1/listings (REST/JSON + Bearer token)
+	API->>FB: verifyIdToken(token) (HTTPS/JWT)
+	FB-->>API: uid, role=farmer
+	API->>API: Validate body with Zod
+	API->>M: insertOne(listing) (Mongo wire)
+	M-->>API: insertedId
+	API->>R: DEL kmb:listing:detail:{listingId}
+	API->>R: PUBLISH kmb:pubsub:listings listing.created
+	API->>WS: emit listing:created to crop-region room
+	WS-->>F: WebSocket event ack
+	API-->>F: 201 application/json {listingId}
+

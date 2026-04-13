@@ -1,0 +1,20 @@
+sequenceDiagram
+	autonumber
+	participant S as Scheduler
+	participant W as Analytics Worker
+	participant M as MongoDB
+	participant R as Redis
+	participant API as Express API
+	participant C as Client SPA
+
+	S->>W: Hourly trigger per region
+	W->>M: aggregate order volume 24h
+	W->>M: aggregate price velocity 7d
+	W->>W: compute composite score
+	W->>R: ZADD kmb:trending:crops:{region} score crop
+	W->>R: EXPIRE kmb:trending:crops:{region} 3600
+	C->>API: GET /v1/analytics/trending?region=IN-HR
+	API->>R: ZREVRANGE kmb:trending:crops:IN-HR 0 9 WITHSCORES
+	R-->>API: top crops + scores
+	API-->>C: 200 application/json
+

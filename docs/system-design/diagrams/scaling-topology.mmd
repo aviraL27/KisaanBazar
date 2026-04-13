@@ -1,0 +1,59 @@
+flowchart TB
+	subgraph Edge[Edge]
+		CDN[CDN + WAF]
+		ALB[ALB / Nginx\nREST round-robin\nWS sticky handshake]
+	end
+
+	subgraph App[Application Cluster]
+		API1[Express REST Pod A]
+		API2[Express REST Pod B]
+		WS1[Socket.IO Pod A]
+		WS2[Socket.IO Pod B]
+		WK1[Worker Pod A]
+		WK2[Worker Pod B]
+	end
+
+	subgraph Cache[Redis Layer]
+		R1[(Redis Master 1)]
+		R2[(Redis Master 2)]
+		R3[(Redis Master 3)]
+		RR1[(Replica 1)]
+		RR2[(Replica 2)]
+		RR3[(Replica 3)]
+	end
+
+	subgraph Data[MongoDB Layer]
+		MP[(Primary)]
+		MS1[(Secondary 1)]
+		MS2[(Secondary 2)]
+		SH[(Shard Cluster for mandiPrices >100M)]
+	end
+
+	CDN -->|HTTPS| ALB
+	ALB -->|REST/JSON| API1
+	ALB -->|REST/JSON| API2
+	ALB -->|WebSocket Socket.IO| WS1
+	ALB -->|WebSocket Socket.IO| WS2
+
+	API1 -->|RESP| R1
+	API2 -->|RESP| R2
+	WS1 -->|Pub/Sub RESP| R2
+	WS2 -->|Pub/Sub RESP| R3
+	WK1 -->|RESP queues/streams| R1
+	WK2 -->|RESP queues/streams| R3
+
+	API1 -->|Mongo wire| MP
+	API2 -->|Mongo wire| MP
+	WS1 -->|Mongo wire read| MS1
+	WS2 -->|Mongo wire read| MS2
+	WK1 -->|Mongo wire bulkWrite| MP
+	WK2 -->|Mongo wire aggregate| MS1
+
+	MP --> MS1
+	MP --> MS2
+	MP --> SH
+
+	R1 --> RR1
+	R2 --> RR2
+	R3 --> RR3
+

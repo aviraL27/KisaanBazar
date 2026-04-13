@@ -1,0 +1,77 @@
+flowchart TB
+	%% Client Layer
+	subgraph C[Client Layer]
+		SPA[React SPA\nTanStack Query + Zustand]
+	end
+
+	%% Edge Layer
+	subgraph E[Edge Layer]
+		ALB[ALB or Nginx\nREST round-robin\nWS sticky sessions]
+	end
+
+	%% Application Layer
+	subgraph A[Application Layer - Express Stateless Pods]
+		AUTH[Auth Middleware\nFirebase token verification]
+		REST[REST Routes\nListing/Order/Price/Analytics/Admin]
+		WS[Socket.IO Handler\nTyped events]
+		JOB[Background Workers\nBullMQ jobs]
+	end
+
+	%% Cache/Event Layer
+	subgraph R[Cache + Event Layer]
+		REDIS[(Redis 7\nHash/Set/ZSet/Stream/PubSub)]
+	end
+
+	%% Data Layer
+	subgraph D[Data Layer]
+		MONGO[(MongoDB Replica Set\nusers,listings,orders,reviews\nmandiPrices TS, priceSnapshots)]
+	end
+
+	%% External Dependencies
+	subgraph X[External Services]
+		FBA[Firebase Auth]
+		MAPI[Mandi Price APIs\ndata.gov.in/agmarknet]
+		PAY[Future Payment Gateway]
+		FCM[Future Notification Service\nFCM/SMS]
+	end
+
+	SPA -->|REST/JSON| ALB
+	SPA -->|WebSocket Socket.IO| ALB
+
+	ALB -->|HTTP/1.1 REST JSON| AUTH
+	AUTH -->|In-process call| REST
+	ALB -->|WebSocket upgrade + Socket.IO events| WS
+
+	AUTH -->|HTTPS JWT verifyIdToken| FBA
+
+	REST -->|Redis protocol RESP| REDIS
+	WS -->|Redis Pub/Sub adapter| REDIS
+	JOB -->|Redis Streams + BullMQ queues| REDIS
+
+	REST -->|MongoDB wire protocol| MONGO
+	JOB -->|MongoDB wire protocol bulkWrite/aggregate| MONGO
+	WS -->|MongoDB wire protocol read status| MONGO
+
+	JOB -->|HTTPS JSON pull prices| MAPI
+	REST -.->|HTTPS JSON future checkout| PAY
+	JOB -.->|HTTPS JSON future push notifications| FCM
+
+	%% Happy Path - Price Lookup
+	P1[1 GET /prices/latest] --> P2[2 Redis Hash read\nkmb:price:latest:wheat:delhi]
+	P2 --> P3[3a Cache hit -> 200 JSON]
+	P2 --> P4[3b Miss -> Mongo query latest doc]
+	P4 --> P5[4 Set Redis TTL 15m -> 200 JSON]
+
+	SPA -. happy path .-> P1
+	P1 -. handled by .-> REST
+
+	%% Happy Path - Order Placement
+	O1[1 POST /orders + Idempotency-Key] --> O2[2 Redis SETNX lock]
+	O2 --> O3[3 Mongo transaction\ndecrement listing + create order]
+	O3 --> O4[4 Redis invalidate listing cache]
+	O4 --> O5[5 Redis Pub/Sub order.created]
+	O5 --> O6[6 Socket.IO emit order update]
+
+	SPA -. happy path .-> O1
+	O1 -. handled by .-> REST
+	O6 -. pushed to .-> SPA

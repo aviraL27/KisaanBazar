@@ -1,0 +1,19 @@
+sequenceDiagram
+	autonumber
+	participant U as User Client
+	participant FSDK as Firebase SDK
+	participant FA as Firebase Auth
+	participant API as Express API
+	participant ADM as Firebase Admin SDK
+
+	U->>FSDK: Login with Phone OTP
+	FSDK->>FA: Verify OTP (HTTPS)
+	FA-->>FSDK: idToken + refreshToken
+	U->>API: REST request Authorization Bearer idToken
+	API->>ADM: verifyIdToken(idToken)
+	ADM->>FA: Validate signature and claims
+	FA-->>ADM: uid + role claims
+	ADM-->>API: decoded token
+	API->>API: attach req.user and enforce RBAC
+	API-->>U: 200/201 JSON response
+
