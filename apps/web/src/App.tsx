@@ -934,6 +934,22 @@ function NotFoundPage() {
   );
 }
 
+function AppFooter(props: { authState: AuthState }) {
+  const { authState } = props;
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || "http://localhost:4000";
+  const authLabel = authState.user ? `${authState.user.role}:${authState.user.uid}` : "guest";
+
+  return (
+    <footer className="app-footer">
+      <div className="app-footer-inner">
+        <p>KisaanBazaar v1 web console</p>
+        <p>API: {apiBase}</p>
+        <p>Session: {authLabel}</p>
+      </div>
+    </footer>
+  );
+}
+
 export function App() {
   const [session, setSession] = useState<DevSession>(() => readSession());
   const auth = useMemo<ApiRequestOptions>(() => {
@@ -1014,6 +1030,7 @@ export function App() {
         <Route path="/about" element={<AboutPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      <AppFooter authState={authState} />
     </>
   );
 }
