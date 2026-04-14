@@ -1,13 +1,26 @@
 import type {
   CreateListingInput,
   CreateListingResponse,
+  ListMyListingsResponse,
   ListListingsResponse,
-  ListingDetailResponse
+  ListingDetailResponse,
+  UpdateListingStatusInput,
+  UpdateListingStatusResponse,
+  UserRole
 } from "@kisaanbazar/shared";
 import { cacheKeys } from "../../cache/keys.js";
 import { getRedis } from "../../config/redis.js";
 import { ListingModel } from "./listing.model.js";
 import { toListingDto } from "./listing.mapper.js";
+
+export class ListingError extends Error {
+  constructor(
+    public readonly code: "LISTING_NOT_FOUND" | "FORBIDDEN",
+    message: string
+  ) {
+    super(message);
+  }
+}
 
 export async function createListing(farmerId: string, input: CreateListingInput): Promise<CreateListingResponse> {
   const created = await ListingModel.create({
@@ -78,4 +91,57 @@ export async function listListings(filters: {
 
   const listings = docs.map((doc: typeof docs[number]) => toListingDto(doc));
   return { listings, count: listings.length };
+}
+
+export async function listMyListings(params: {
+  farmerId: string;
+  limit: number;
+}): Promise<ListMyListingsResponse> {
+  const docs = await ListingModel.find({ farmerId: params.farmerId })
+    .sort({ createdAt: -1 })
+    .limit(params.limit)
+    .exec();
+
+  const listings = docs.map((doc: typeof docs[number]) => toListingDto(doc));
+  return { listings, count: listings.length };
+}
+
+export async function updateListingStatus(params: {
+  listingId: string;
+  actorUid: string;
+  actorRole: UserRole;
+  input: UpdateListingStatusInput;
+}): Promise<UpdateListingStatusResponse> {
+  const query: Record<string, string> = { _id: params.listingId };
+  if (params.actorRole !== "admin") {
+    query.farmerId = params.actorUid;
+  }
+
+  const updated = await ListingModel.findOneAndUpdate(
+    query,
+    {
+      $set: {
+        status: params.input.status,
+        updatedAt: new Date()
+      }
+    },
+    { new: true }
+  ).exec();
+
+  if (!updated) {
+    const exists = await ListingModel.exists({ _id: params.listingId }).exec();
+    if (!exists) {
+      throw new ListingError("LISTING_NOT_FOUND", "Listing not found");
+    }
+
+    throw new ListingError("FORBIDDEN", "Cannot modify this listing");
+  }
+
+  const dto = toListingDto(updated);
+  const redis = getRedis();
+  if (redis) {
+    await redis.set(cacheKeys.listingDetail(dto.id), JSON.stringify(dto), "EX", 300);
+  }
+
+  return { listing: dto };
 }

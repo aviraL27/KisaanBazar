@@ -1,21 +1,36 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
 import type {
+  AuthMeResponse,
   CreateListingInput,
   CreateListingResponse,
   ListListingsResponse,
+  ListMyListingsResponse,
+  ListMyOrdersResponse,
+  Order,
+  OrderStatus,
   PlaceOrderInput,
   PlaceOrderResponse,
   PriceHistoryResponse,
   PriceLatestResponse,
+  UpdateListingStatusInput,
+  UpdateListingStatusResponse,
   UserRole
 } from "@kisaanbazar/shared";
-import { apiGet, apiPost, type ApiRequestOptions } from "./lib/api";
+import { apiGet, apiPatch, apiPost, type ApiRequestOptions } from "./lib/api";
 
 interface DevSession {
   token: string;
   role: UserRole;
+}
+
+interface AuthState {
+  tokenPresent: boolean;
+  isLoading: boolean;
+  isError: boolean;
+  errorMessage: string;
+  user?: AuthMeResponse["user"];
 }
 
 const sessionStorageKey = "kisaanbazar-dev-session";
@@ -46,6 +61,16 @@ function writeSession(session: DevSession): void {
   window.localStorage.setItem(sessionStorageKey, JSON.stringify(session));
 }
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString("en-IN", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function SessionBar(props: { session: DevSession; onChange: (next: DevSession) => void }) {
   const { session, onChange } = props;
 
@@ -74,6 +99,88 @@ function SessionBar(props: { session: DevSession; onChange: (next: DevSession) =
   );
 }
 
+function UserBadge(props: { authState: AuthState; sessionRole: UserRole }) {
+  const { authState, sessionRole } = props;
+
+  if (!authState.tokenPresent) {
+    return <p className="user-badge warning">Token missing. Protected routes will reject requests.</p>;
+  }
+
+  if (authState.isLoading) {
+    return <p className="user-badge">Checking user session...</p>;
+  }
+
+  if (authState.isError) {
+    return <p className="user-badge error">Auth check failed: {authState.errorMessage}</p>;
+  }
+
+  if (!authState.user) {
+    return <p className="user-badge warning">Signed in token present but no user resolved.</p>;
+  }
+
+  return (
+    <p className="user-badge success">
+      Signed in as <strong>{authState.user.role}</strong> ({authState.user.uid})
+      {authState.user.role !== sessionRole ? `, dev selector=${sessionRole}` : ""}
+    </p>
+  );
+}
+
+function GuardedRoute(props: {
+  authState: AuthState;
+  allowedRoles: UserRole[];
+  title: string;
+  children: ReactNode;
+}) {
+  const { authState, allowedRoles, title, children } = props;
+
+  if (!authState.tokenPresent) {
+    return (
+      <main className="page">
+        <section className="card auth-state">
+          <h1>{title}</h1>
+          <p className="status error">Missing bearer token. Add a token in the session bar to continue.</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (authState.isLoading) {
+    return (
+      <main className="page">
+        <section className="card auth-state">
+          <h1>{title}</h1>
+          <p className="status">Loading user profile...</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (authState.isError || !authState.user) {
+    return (
+      <main className="page">
+        <section className="card auth-state">
+          <h1>{title}</h1>
+          <p className="status error">Unable to verify user: {authState.errorMessage || "Unknown error"}</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!allowedRoles.includes(authState.user.role)) {
+    return (
+      <main className="page">
+        <section className="card auth-state">
+          <h1>{title}</h1>
+          <p className="status error">Role {authState.user.role} cannot access this page.</p>
+        </section>
+      </main>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 function HomePage() {
   return (
     <main className="page">
@@ -84,9 +191,148 @@ function HomePage() {
           Explore active listings, compare mandi pricing, and move from discovery to order with a single workflow.
         </p>
         <div className="cta-row">
+          <Link className="btn btn-primary" to="/dashboard">Open dashboard</Link>
           <Link className="btn btn-primary" to="/marketplace">Open marketplace</Link>
           <Link className="btn btn-secondary" to="/prices">View mandi prices</Link>
         </div>
+      </section>
+
+      <section className="grid home-highlights">
+        <article className="card">
+          <h2>For buyers</h2>
+          <p className="muted">Compare listings, place protected orders, and track status transitions in one timeline.</p>
+          <Link className="btn btn-secondary" to="/orders">View order history</Link>
+        </article>
+        <article className="card">
+          <h2>For farmers</h2>
+          <p className="muted">Publish listings quickly and manage lifecycle states as stock changes in real time.</p>
+          <Link className="btn btn-secondary" to="/farmer/listings">Manage listings</Link>
+        </article>
+        <article className="card">
+          <h2>For operations</h2>
+          <p className="muted">Use role-aware routes, typed API contracts, and integration-tested order flows.</p>
+          <Link className="btn btn-secondary" to="/about">Read platform scope</Link>
+        </article>
+      </section>
+    </main>
+  );
+}
+
+function DashboardPage(props: { auth: ApiRequestOptions; authState: AuthState }) {
+  const { auth, authState } = props;
+  const role = authState.user?.role;
+  const [crop, setCrop] = useState("wheat");
+  const [mandi, setMandi] = useState("pune");
+
+  const listingsQuery = useQuery({
+    queryKey: ["dashboard-listings"],
+    queryFn: async () => apiGet<ListListingsResponse>("/v1/listings", { limit: 6 })
+  });
+
+  const latestPriceQuery = useQuery({
+    queryKey: ["dashboard-price", crop, mandi],
+    queryFn: async () => apiGet<PriceLatestResponse>("/v1/prices/latest", { crop, mandi }),
+    enabled: crop.trim().length > 0 && mandi.trim().length > 0
+  });
+
+  const myOrdersQuery = useQuery({
+    queryKey: ["dashboard-my-orders"],
+    queryFn: async () => apiGet<ListMyOrdersResponse>("/v1/orders/mine", { limit: 5 }, auth),
+    enabled: role === "buyer" || role === "admin"
+  });
+
+  const myListingsQuery = useQuery({
+    queryKey: ["dashboard-my-listings"],
+    queryFn: async () => apiGet<ListMyListingsResponse>("/v1/listings/mine", { limit: 12 }, auth),
+    enabled: role === "farmer" || role === "admin"
+  });
+
+  const activeCount = listingsQuery.data?.listings.length ?? 0;
+  const myOrdersCount = myOrdersQuery.data?.count ?? 0;
+  const myListingsCount = myListingsQuery.data?.count ?? 0;
+  const soldOutCount = myListingsQuery.data?.listings.filter((listing) => listing.status === "sold_out").length ?? 0;
+
+  return (
+    <main className="page">
+      <section className="hero compact">
+        <p className="eyebrow">Command Center</p>
+        <h1>KisaanBazaar dashboard</h1>
+        <p className="subtitle">Role-aware snapshot for demand, supply, and price movement to drive next action.</p>
+      </section>
+
+      <section className="grid metrics-grid">
+        <article className="card metric-card">
+          <p className="metric-label">Live listings</p>
+          <p className="metric-value">{activeCount}</p>
+        </article>
+        <article className="card metric-card">
+          <p className="metric-label">My orders</p>
+          <p className="metric-value">{role === "buyer" || role === "admin" ? myOrdersCount : "-"}</p>
+        </article>
+        <article className="card metric-card">
+          <p className="metric-label">My listings</p>
+          <p className="metric-value">{role === "farmer" || role === "admin" ? myListingsCount : "-"}</p>
+        </article>
+        <article className="card metric-card">
+          <p className="metric-label">Sold out listings</p>
+          <p className="metric-value">{role === "farmer" || role === "admin" ? soldOutCount : "-"}</p>
+        </article>
+      </section>
+
+      <section className="grid dashboard-grid">
+        <article className="card">
+          <h2>Quick actions</h2>
+          <div className="quick-actions">
+            <Link className="btn btn-secondary" to="/marketplace">Browse marketplace</Link>
+            {(role === "buyer" || role === "admin") && (
+              <Link className="btn btn-secondary" to="/orders">Track my orders</Link>
+            )}
+            {(role === "farmer" || role === "admin") && (
+              <>
+                <Link className="btn btn-secondary" to="/sell">Create listing</Link>
+                <Link className="btn btn-secondary" to="/farmer/listings">Manage listing status</Link>
+              </>
+            )}
+          </div>
+        </article>
+
+        <article className="card">
+          <h2>Price pulse</h2>
+          <div className="filters compact-filters">
+            <label>
+              Crop
+              <input value={crop} onChange={(event) => setCrop(event.target.value)} />
+            </label>
+            <label>
+              Mandi
+              <input value={mandi} onChange={(event) => setMandi(event.target.value)} />
+            </label>
+          </div>
+          {latestPriceQuery.isLoading && <p className="status">Loading price snapshot...</p>}
+          {latestPriceQuery.isError && <p className="status error">{(latestPriceQuery.error as Error).message}</p>}
+          {latestPriceQuery.data && (
+            <>
+              <p className="price">Rs.{latestPriceQuery.data.price.modalPrice}/{latestPriceQuery.data.price.unit}</p>
+              <p className="muted">{latestPriceQuery.data.price.mandi}, {latestPriceQuery.data.price.state}</p>
+            </>
+          )}
+        </article>
+
+        <article className="card">
+          <h2>Recent listings</h2>
+          {listingsQuery.isLoading && <p className="status">Loading listings...</p>}
+          {listingsQuery.isError && <p className="status error">{(listingsQuery.error as Error).message}</p>}
+          {listingsQuery.data && listingsQuery.data.count === 0 && <p className="status">No active listings right now.</p>}
+          {listingsQuery.data && listingsQuery.data.count > 0 && (
+            <ul className="simple-list">
+              {listingsQuery.data.listings.map((listing) => (
+                <li key={listing.id}>
+                  <strong>{listing.crop}</strong> - {listing.quantity} {listing.unit} at Rs.{listing.pricePerUnit}/{listing.unit}
+                </li>
+              ))}
+            </ul>
+          )}
+        </article>
       </section>
     </main>
   );
@@ -98,6 +344,7 @@ function MarketplacePage(props: { auth: ApiRequestOptions }) {
   const [state, setState] = useState("");
   const [limit, setLimit] = useState(12);
   const [qtyByListing, setQtyByListing] = useState<Record<string, number>>({});
+  const [lastOrder, setLastOrder] = useState<Order | null>(null);
   const queryClient = useQueryClient();
 
   const query = useQuery({
@@ -113,8 +360,10 @@ function MarketplacePage(props: { auth: ApiRequestOptions }) {
 
   const orderMutation = useMutation({
     mutationFn: async (input: PlaceOrderInput) => apiPost<PlaceOrderResponse, PlaceOrderInput>("/v1/orders", input, auth),
-    onSuccess: async () => {
+    onSuccess: async (data) => {
+      setLastOrder(data.order);
       await queryClient.invalidateQueries({ queryKey: ["listings"] });
+      await queryClient.invalidateQueries({ queryKey: ["orders-mine"] });
     }
   });
 
@@ -196,7 +445,118 @@ function MarketplacePage(props: { auth: ApiRequestOptions }) {
       )}
 
       {orderMutation.isError && <p className="status error">{(orderMutation.error as Error).message}</p>}
-      {orderMutation.isSuccess && <p className="status">Order placed successfully.</p>}
+      {orderMutation.isSuccess && lastOrder && (
+        <section className="card success-panel">
+          <h2>Order placed successfully</h2>
+          <p>
+            {lastOrder.item.crop} x {lastOrder.item.qty} {lastOrder.item.unit} for Rs.{lastOrder.amountTotal}
+          </p>
+          <p className="muted">Order ID: {lastOrder.id}</p>
+          <Link className="btn btn-secondary" to="/orders">Open order history</Link>
+        </section>
+      )}
+    </main>
+  );
+}
+
+function timelineForStatus(status: OrderStatus): { id: string; label: string; state: "done" | "current" | "pending" }[] {
+  const happyFlow: OrderStatus[] = ["placed", "confirmed", "shipped", "delivered"];
+  const cancelledFlow: OrderStatus[] = ["placed", "cancelled"];
+  const rejectedFlow: OrderStatus[] = ["placed", "rejected"];
+  const counteredFlow: OrderStatus[] = ["placed", "countered"];
+  const disputedFlow: OrderStatus[] = ["placed", "confirmed", "disputed"];
+
+  const flow =
+    status === "cancelled"
+      ? cancelledFlow
+      : status === "rejected"
+        ? rejectedFlow
+        : status === "countered"
+          ? counteredFlow
+          : status === "disputed"
+            ? disputedFlow
+            : happyFlow;
+
+  const currentIndex = flow.indexOf(status);
+  return flow.map((step, index) => ({
+    id: step,
+    label: step.replace("_", " "),
+    state: index < currentIndex ? "done" : index === currentIndex ? "current" : "pending"
+  }));
+}
+
+function OrderHistoryCard(props: { order: Order }) {
+  const { order } = props;
+  const timeline = timelineForStatus(order.status);
+
+  return (
+    <article className="card order-card">
+      <div className="card-head">
+        <h2>{order.item.crop}</h2>
+        <span className="badge">{order.status}</span>
+      </div>
+      <p>
+        Qty: {order.item.qty} {order.item.unit} at Rs.{order.item.pricePerUnit}/{order.item.unit}
+      </p>
+      <p>Total: Rs.{order.amountTotal}</p>
+      <p className="muted">Placed on {formatDate(order.createdAt)}</p>
+      <ol className="timeline">
+        {timeline.map((step) => (
+          <li key={step.id} className={`timeline-item ${step.state}`}>
+            <span>{step.label}</span>
+          </li>
+        ))}
+      </ol>
+    </article>
+  );
+}
+
+function BuyerOrdersPage(props: { auth: ApiRequestOptions }) {
+  const { auth } = props;
+  const [limit, setLimit] = useState(20);
+
+  const query = useQuery({
+    queryKey: ["orders-mine", limit],
+    queryFn: async () => apiGet<ListMyOrdersResponse>("/v1/orders/mine", { limit }, auth)
+  });
+
+  return (
+    <main className="page">
+      <section className="hero compact">
+        <p className="eyebrow">Buyer Desk</p>
+        <h1>Order history</h1>
+        <p className="subtitle">Track every order from placement to closure through a clear status timeline.</p>
+      </section>
+
+      <section className="filters card">
+        <label>
+          Show latest
+          <select value={limit} onChange={(event) => setLimit(Number(event.target.value))}>
+            <option value={10}>10</option>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+          </select>
+        </label>
+      </section>
+
+      {query.isLoading && <p className="status">Loading your orders...</p>}
+      {query.isError && <p className="status error">{(query.error as Error).message}</p>}
+
+      {query.data && query.data.count === 0 && (
+        <section className="card empty-state">
+          <h2>No orders yet</h2>
+          <p className="muted">Place your first order from Marketplace to see status updates here.</p>
+          <Link className="btn btn-secondary" to="/marketplace">Browse listings</Link>
+        </section>
+      )}
+
+      {query.data && query.data.count > 0 && (
+        <section className="grid order-grid">
+          {query.data.orders.map((order) => (
+            <OrderHistoryCard key={order.id} order={order} />
+          ))}
+        </section>
+      )}
     </main>
   );
 }
@@ -222,6 +582,7 @@ function SellPage(props: { auth: ApiRequestOptions }) {
     mutationFn: async (payload: CreateListingInput) => apiPost<CreateListingResponse, CreateListingInput>("/v1/listings", payload, auth),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["listings"] });
+      await queryClient.invalidateQueries({ queryKey: ["my-listings"] });
     }
   });
 
@@ -348,6 +709,123 @@ function SellPage(props: { auth: ApiRequestOptions }) {
   );
 }
 
+function FarmerListingsPage(props: { auth: ApiRequestOptions }) {
+  const { auth } = props;
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ["my-listings"],
+    queryFn: async () => apiGet<ListMyListingsResponse>("/v1/listings/mine", { limit: 50 }, auth)
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (input: { listingId: string; status: UpdateListingStatusInput["status"] }) => {
+      return apiPatch<UpdateListingStatusResponse, UpdateListingStatusInput>(
+        `/v1/listings/${input.listingId}/status`,
+        { status: input.status },
+        auth
+      );
+    },
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: ["my-listings"] });
+      const previous = queryClient.getQueryData<ListMyListingsResponse>(["my-listings"]);
+
+      if (previous) {
+        queryClient.setQueryData<ListMyListingsResponse>(["my-listings"], {
+          ...previous,
+          listings: previous.listings.map((listing) =>
+            listing.id === input.listingId ? { ...listing, status: input.status } : listing
+          )
+        });
+      }
+
+      return { previous };
+    },
+    onError: (_error, _input, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(["my-listings"], context.previous);
+      }
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["my-listings"] });
+      await queryClient.invalidateQueries({ queryKey: ["listings"] });
+    }
+  });
+
+  return (
+    <main className="page">
+      <section className="hero compact">
+        <p className="eyebrow">Farmer Desk</p>
+        <h1>Manage listings</h1>
+        <p className="subtitle">Pause, mark sold out, or archive your existing listings in one place.</p>
+      </section>
+
+      {query.isLoading && <p className="status">Loading your listings...</p>}
+      {query.isError && <p className="status error">{(query.error as Error).message}</p>}
+
+      {query.data && query.data.count === 0 && (
+        <section className="card empty-state">
+          <h2>No listings yet</h2>
+          <p className="muted">Create your first listing from the Sell page.</p>
+          <Link className="btn btn-secondary" to="/sell">Go to Sell</Link>
+        </section>
+      )}
+
+      {query.data && query.data.count > 0 && (
+        <section className="grid farmer-listings-grid">
+          {query.data.listings.map((listing) => {
+            const isBusy = mutation.isPending;
+
+            return (
+              <article className="card farmer-listing-card" key={listing.id}>
+                <div className="card-head">
+                  <h2>{listing.crop}</h2>
+                  <span className="badge">{listing.status}</span>
+                </div>
+                <p>
+                  {listing.quantity} {listing.unit} at Rs.{listing.pricePerUnit}/{listing.unit}
+                </p>
+                <p className="muted">
+                  {listing.locationMeta.mandi}, {listing.locationMeta.district}, {listing.locationMeta.state}
+                </p>
+                <div className="listing-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={isBusy || listing.status === "paused"}
+                    onClick={() => mutation.mutate({ listingId: listing.id, status: "paused" })}
+                  >
+                    Pause
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={isBusy || listing.status === "sold_out"}
+                    onClick={() => mutation.mutate({ listingId: listing.id, status: "sold_out" })}
+                  >
+                    Sold out
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={isBusy || listing.status === "archived"}
+                    onClick={() => mutation.mutate({ listingId: listing.id, status: "archived" })}
+                  >
+                    Archive
+                  </button>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      )}
+
+      {mutation.isError && <p className="status error">{(mutation.error as Error).message}</p>}
+      {mutation.isSuccess && <p className="status">Listing status updated.</p>}
+    </main>
+  );
+}
+
 function PricesPage() {
   const [crop, setCrop] = useState("wheat");
   const [mandi, setMandi] = useState("pune");
@@ -438,8 +916,20 @@ function AboutPage() {
     <main className="page">
       <h1>About</h1>
       <p>
-        V1 now includes marketplace and mandi price views wired to backend endpoints with shared typed contracts.
+        V1 now includes marketplace, buyer orders, farmer listing management, and mandi price views wired to backend endpoints with shared typed contracts.
       </p>
+    </main>
+  );
+}
+
+function NotFoundPage() {
+  return (
+    <main className="page">
+      <section className="card empty-state">
+        <h1>Page not found</h1>
+        <p className="muted">The route you requested does not exist in this build.</p>
+        <Link className="btn btn-secondary" to="/dashboard">Go to dashboard</Link>
+      </section>
     </main>
   );
 }
@@ -451,13 +941,33 @@ export function App() {
     return token ? { token, devRole: session.role } : { devRole: session.role };
   }, [session]);
 
+  const meQuery = useQuery({
+    queryKey: ["auth-me", auth.token, auth.devRole],
+    queryFn: async () => apiGet<AuthMeResponse>("/v1/auth/me", undefined, auth),
+    enabled: Boolean(auth.token),
+    retry: false
+  });
+
+  const authState: AuthState = {
+    tokenPresent: Boolean(auth.token),
+    isLoading: meQuery.isLoading,
+    isError: meQuery.isError,
+    errorMessage: meQuery.isError ? (meQuery.error as Error).message : "",
+    ...(meQuery.data?.user ? { user: meQuery.data.user } : {})
+  };
+
+  const navRole = authState.user?.role;
+
   return (
     <>
       <header className="topbar">
         <nav>
+          <NavLink to="/dashboard">Dashboard</NavLink>
           <NavLink to="/">Home</NavLink>
           <NavLink to="/marketplace">Marketplace</NavLink>
-          <NavLink to="/sell">Sell</NavLink>
+          {(navRole === "buyer" || navRole === "admin") && <NavLink to="/orders">Orders</NavLink>}
+          {(navRole === "farmer" || navRole === "admin") && <NavLink to="/sell">Sell</NavLink>}
+          {(navRole === "farmer" || navRole === "admin") && <NavLink to="/farmer/listings">My Listings</NavLink>}
           <NavLink to="/prices">Prices</NavLink>
           <NavLink to="/about">About</NavLink>
         </nav>
@@ -468,13 +978,41 @@ export function App() {
             writeSession(next);
           }}
         />
+        <div className="identity-row">
+          <UserBadge authState={authState} sessionRole={session.role} />
+        </div>
       </header>
       <Routes>
+        <Route path="/dashboard" element={<DashboardPage auth={auth} authState={authState} />} />
         <Route path="/" element={<HomePage />} />
         <Route path="/marketplace" element={<MarketplacePage auth={auth} />} />
-        <Route path="/sell" element={<SellPage auth={auth} />} />
+        <Route
+          path="/orders"
+          element={
+            <GuardedRoute authState={authState} allowedRoles={["buyer", "admin"]} title="Order history">
+              <BuyerOrdersPage auth={auth} />
+            </GuardedRoute>
+          }
+        />
+        <Route
+          path="/sell"
+          element={
+            <GuardedRoute authState={authState} allowedRoles={["farmer", "admin"]} title="Create listing">
+              <SellPage auth={auth} />
+            </GuardedRoute>
+          }
+        />
+        <Route
+          path="/farmer/listings"
+          element={
+            <GuardedRoute authState={authState} allowedRoles={["farmer", "admin"]} title="Manage listings">
+              <FarmerListingsPage auth={auth} />
+            </GuardedRoute>
+          }
+        />
         <Route path="/prices" element={<PricesPage />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </>
   );

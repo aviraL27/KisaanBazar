@@ -81,3 +81,27 @@ export async function apiPost<TResponse, TBody>(
 
   return payload.data;
 }
+
+export async function apiPatch<TResponse, TBody>(
+  path: string,
+  body: TBody,
+  options?: ApiRequestOptions
+): Promise<TResponse> {
+  const response = await fetch(toUrl(path), {
+    method: "PATCH",
+    headers: {
+      ...buildHeaders(options),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  const payload = (await response.json()) as ApiSuccess<TResponse> | ApiError;
+
+  if (!response.ok || !payload.ok) {
+    const message = payload.ok ? "Request failed" : payload.message;
+    throw new Error(message);
+  }
+
+  return payload.data;
+}

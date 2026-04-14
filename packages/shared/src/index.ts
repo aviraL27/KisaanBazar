@@ -130,6 +130,24 @@ export interface PlaceOrderResponse {
   order: Order;
 }
 
+export interface ListMyOrdersResponse {
+  orders: Order[];
+  count: number;
+}
+
+export interface ListMyListingsResponse {
+  listings: Listing[];
+  count: number;
+}
+
+export interface UpdateListingStatusInput {
+  status: "paused" | "sold_out" | "archived";
+}
+
+export interface UpdateListingStatusResponse {
+  listing: Listing;
+}
+
 export interface PricePoint {
   crop: string;
   mandi: string;

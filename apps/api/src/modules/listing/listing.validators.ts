@@ -32,3 +32,11 @@ export const listListingQuerySchema = z.object({
   state: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20)
 });
+
+export const listMyListingsQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(20)
+});
+
+export const updateListingStatusSchema = z.object({
+  status: z.enum(["paused", "sold_out", "archived"])
+});

@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import type { PlaceOrderResponse } from "@kisaanbazar/shared";
+import type { ListMyOrdersResponse, PlaceOrderResponse } from "@kisaanbazar/shared";
 import { cacheKeys } from "../../cache/keys.js";
 import { isMongoConnected } from "../../config/mongodb.js";
 import { getRedis } from "../../config/redis.js";
@@ -127,4 +127,14 @@ export async function placeOrder(params: {
   } finally {
     await session.endSession();
   }
+}
+
+export async function listMyOrdersForBuyer(params: { buyerId: string; limit: number }): Promise<ListMyOrdersResponse> {
+  const docs = await OrderModel.find({ buyerId: params.buyerId })
+    .sort({ createdAt: -1 })
+    .limit(params.limit)
+    .exec();
+
+  const orders = docs.map((doc: typeof docs[number]) => toOrderDto(doc));
+  return { orders, count: orders.length };
 }

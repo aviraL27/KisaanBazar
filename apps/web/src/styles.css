@@ -53,6 +53,40 @@ body {
   padding: 0.45rem 0.6rem;
 }
 
+.identity-row {
+  margin: 0 auto 1rem;
+  max-width: 960px;
+  padding: 0 1rem;
+}
+
+.user-badge {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.user-badge.success {
+  border-color: #bfd5a6;
+  background: #f5faee;
+  color: #3f5a25;
+}
+
+.user-badge.warning {
+  border-color: #e2cea4;
+  background: #fbf2df;
+  color: #6e541a;
+}
+
+.user-badge.error {
+  border-color: #dfb2b2;
+  background: #fceeee;
+  color: #8f2929;
+}
+
 nav {
   margin: 0 auto;
   max-width: 960px;
@@ -113,6 +147,10 @@ nav a.active {
   display: flex;
   gap: 0.8rem;
   flex-wrap: wrap;
+}
+
+.home-highlights {
+  margin-top: 1.2rem;
 }
 
 .btn {
@@ -187,6 +225,10 @@ nav a.active {
   color: #992929;
 }
 
+.auth-state {
+  margin-top: 1rem;
+}
+
 .listings-grid {
   margin-top: 1rem;
 }
@@ -216,6 +258,64 @@ nav a.active {
   padding: 0.5rem 0.6rem;
 }
 
+.order-grid {
+  margin-top: 1rem;
+}
+
+.order-card {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.timeline {
+  margin: 0.6rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.timeline-item {
+  border-left: 3px solid var(--line);
+  padding-left: 0.6rem;
+  text-transform: capitalize;
+  color: var(--muted);
+}
+
+.timeline-item.done {
+  border-color: #8db66a;
+  color: #426029;
+}
+
+.timeline-item.current {
+  border-color: var(--accent-deep);
+  color: var(--accent-deep);
+  font-weight: 700;
+}
+
+.empty-state {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.empty-state h2 {
+  margin: 0;
+}
+
+.success-panel {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.45rem;
+  border-color: #bfd5a6;
+  background: #f7fced;
+}
+
+.success-panel h2 {
+  margin: 0;
+  color: #36531a;
+}
+
 .badge {
   border-radius: 999px;
   background: var(--accent-soft);
@@ -223,6 +323,49 @@ nav a.active {
   font-size: 0.8rem;
   font-weight: 700;
   padding: 0.2rem 0.5rem;
+}
+
+.metrics-grid {
+  margin-top: 1rem;
+}
+
+.metric-card {
+  background: linear-gradient(145deg, #fffdf8, #f6f2e7);
+}
+
+.metric-label {
+  margin: 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.metric-value {
+  margin: 0.5rem 0 0;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--accent-deep);
+}
+
+.dashboard-grid {
+  margin-top: 1rem;
+}
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.compact-filters {
+  margin-top: 0.4rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+.simple-list {
+  margin: 0.4rem 0 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.45rem;
 }
 
 .muted {
@@ -258,8 +401,27 @@ nav a.active {
   background: #fff;
 }
 
+.farmer-listings-grid {
+  margin-top: 1rem;
+}
+
+.farmer-listing-card {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.listing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 @media (max-width: 800px) {
   .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-filters {
     grid-template-columns: 1fr;
   }
 

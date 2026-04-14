@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { fail, ok } from "../../shared/http.js";
-import { placeOrderSchema } from "./order.validators.js";
-import { OrderError, placeOrder } from "./order.service.js";
+import { listMyOrdersQuerySchema, placeOrderSchema } from "./order.validators.js";
+import { listMyOrdersForBuyer, OrderError, placeOrder } from "./order.service.js";
 
 export async function placeOrderHandler(req: Request, res: Response): Promise<void> {
   const parsed = placeOrderSchema.safeParse(req.body);
@@ -44,4 +44,24 @@ export async function placeOrderHandler(req: Request, res: Response): Promise<vo
 
     res.status(500).json(fail(req.id, "INTERNAL_ERROR", "Failed to place order"));
   }
+}
+
+export async function listMyOrdersHandler(req: Request, res: Response): Promise<void> {
+  const parsed = listMyOrdersQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(422).json(fail(req.id, "VALIDATION_ERROR", parsed.error.message));
+    return;
+  }
+
+  if (!req.user) {
+    res.status(401).json(fail(req.id, "UNAUTHORIZED", "Authentication required"));
+    return;
+  }
+
+  const result = await listMyOrdersForBuyer({
+    buyerId: req.user.uid,
+    limit: parsed.data.limit
+  });
+
+  res.status(200).json(ok(req.id, result));
 }
