@@ -35,7 +35,7 @@ body {
   padding: 0 1rem;
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: 1fr 200px;
+  grid-template-columns: 1fr 1fr 200px;
 }
 
 .session-bar label {
@@ -93,6 +93,7 @@ nav {
   padding: 1rem;
   display: flex;
   gap: 1rem;
+  align-items: center;
 }
 
 nav a {
@@ -173,6 +174,10 @@ nav a.active {
 .btn-secondary {
   border: 1px solid var(--accent-deep);
   color: var(--accent-deep);
+}
+
+.logout-btn {
+  margin-left: auto;
 }
 
 .grid {
@@ -350,6 +355,20 @@ nav a.active {
   margin-top: 1rem;
 }
 
+.dependency-card {
+  margin-top: 1rem;
+}
+
+.dependency-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+}
+
+.dependency-grid p {
+  margin: 0;
+}
+
 .quick-actions {
   display: flex;
   flex-wrap: wrap;
@@ -401,6 +420,56 @@ nav a.active {
   background: #fff;
 }
 
+.login-form {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: 1fr 220px auto;
+  align-items: end;
+}
+
+.login-form label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.login-form input,
+.login-form select {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.5rem 0.6rem;
+  background: #fff;
+}
+
+.alerts-card,
+.regional-insights-card {
+  margin-top: 1rem;
+}
+
+.regional-table-wrap {
+  overflow-x: auto;
+}
+
+.regional-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.regional-table th,
+.regional-table td {
+  text-align: left;
+  padding: 0.55rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.regional-table th {
+  color: var(--muted);
+  font-weight: 700;
+}
+
 .farmer-listings-grid {
   margin-top: 1rem;
 }
@@ -447,6 +516,11 @@ nav a.active {
 
   .sell-form {
     grid-template-columns: 1fr;
+  }
+
+  .login-form {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .session-bar {

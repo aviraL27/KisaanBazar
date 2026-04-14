@@ -5,6 +5,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.
 export interface ApiRequestOptions {
   token?: string;
   devRole?: "farmer" | "buyer" | "admin";
+  devUid?: string;
 }
 
 function toUrl(path: string, query?: Record<string, string | number | undefined>): string {
@@ -33,6 +34,10 @@ function buildHeaders(options?: ApiRequestOptions): HeadersInit {
 
   if (options?.devRole) {
     headers["x-dev-role"] = options.devRole;
+  }
+
+  if (options?.devUid) {
+    headers["x-dev-uid"] = options.devUid;
   }
 
   return headers;

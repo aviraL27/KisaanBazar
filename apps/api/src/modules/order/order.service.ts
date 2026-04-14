@@ -105,6 +105,10 @@ export async function placeOrder(params: {
 
     if (redis) {
       await redis.del(cacheKeys.listingDetail(params.listingId));
+      const listingListKeys = await redis.keys("kmb:listing:list:*");
+      if (listingListKeys.length > 0) {
+        await redis.del(...listingListKeys);
+      }
       await redis.publish(
         "kmb:pubsub:orders",
         JSON.stringify({ event: "order.created", orderId: saved._id.toString(), listingId: params.listingId })

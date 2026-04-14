@@ -13,6 +13,22 @@ import { getRedis } from "../../config/redis.js";
 import { ListingModel } from "./listing.model.js";
 import { toListingDto } from "./listing.mapper.js";
 
+function normalizeValue(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+async function invalidateListingListCache(): Promise<void> {
+  const redis = getRedis();
+  if (!redis) {
+    return;
+  }
+
+  const keys = await redis.keys("kmb:listing:list:*");
+  if (keys.length > 0) {
+    await redis.del(...keys);
+  }
+}
+
 export class ListingError extends Error {
   constructor(
     public readonly code: "LISTING_NOT_FOUND" | "FORBIDDEN",
@@ -25,7 +41,7 @@ export class ListingError extends Error {
 export async function createListing(farmerId: string, input: CreateListingInput): Promise<CreateListingResponse> {
   const created = await ListingModel.create({
     farmerId,
-    crop: input.crop,
+    crop: normalizeValue(input.crop),
     qualityGrade: input.qualityGrade,
     quantity: input.quantity,
     unit: input.unit,
@@ -33,7 +49,11 @@ export async function createListing(farmerId: string, input: CreateListingInput)
     harvestDate: new Date(input.harvestDate),
     images: input.images,
     location: input.location,
-    locationMeta: input.locationMeta,
+    locationMeta: {
+      state: normalizeValue(input.locationMeta.state),
+      district: normalizeValue(input.locationMeta.district),
+      mandi: normalizeValue(input.locationMeta.mandi)
+    },
     status: "active"
   });
 
@@ -43,27 +63,30 @@ export async function createListing(farmerId: string, input: CreateListingInput)
     await redis.set(cacheKeys.listingDetail(dto.id), JSON.stringify(dto), "EX", 300);
   }
 
+  await invalidateListingListCache();
+
   return { listing: dto };
 }
 
 export async function getListingById(id: string): Promise<ListingDetailResponse | null> {
+  const normalizedId = id.trim();
   const redis = getRedis();
 
   if (redis) {
-    const cached = await redis.get(cacheKeys.listingDetail(id));
+    const cached = await redis.get(cacheKeys.listingDetail(normalizedId));
     if (cached) {
       return { listing: JSON.parse(cached) };
     }
   }
 
-  const doc = await ListingModel.findById(id).exec();
+  const doc = await ListingModel.findById(normalizedId).exec();
   if (!doc) {
     return null;
   }
 
   const dto = toListingDto(doc);
   if (redis) {
-    await redis.set(cacheKeys.listingDetail(id), JSON.stringify(dto), "EX", 300);
+    await redis.set(cacheKeys.listingDetail(normalizedId), JSON.stringify(dto), "EX", 300);
   }
 
   return { listing: dto };
@@ -74,14 +97,26 @@ export async function listListings(filters: {
   state?: string | undefined;
   limit: number;
 }): Promise<ListListingsResponse> {
-  const query: Record<string, unknown> = { status: "active" };
+  const normalizedCrop = filters.crop ? normalizeValue(filters.crop) : undefined;
+  const normalizedState = filters.state ? normalizeValue(filters.state) : undefined;
+  const cacheKey = cacheKeys.listingList(normalizedCrop ?? "all", normalizedState ?? "all", filters.limit);
+  const redis = getRedis();
 
-  if (filters.crop) {
-    query.crop = filters.crop;
+  if (redis) {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return JSON.parse(cached) as ListListingsResponse;
+    }
   }
 
-  if (filters.state) {
-    query["locationMeta.state"] = filters.state;
+  const query: Record<string, unknown> = { status: "active" };
+
+  if (normalizedCrop) {
+    query.crop = normalizedCrop;
+  }
+
+  if (normalizedState) {
+    query["locationMeta.state"] = normalizedState;
   }
 
   const docs = await ListingModel.find(query)
@@ -90,7 +125,13 @@ export async function listListings(filters: {
     .exec();
 
   const listings = docs.map((doc: typeof docs[number]) => toListingDto(doc));
-  return { listings, count: listings.length };
+  const payload = { listings, count: listings.length };
+
+  if (redis) {
+    await redis.set(cacheKey, JSON.stringify(payload), "EX", 120);
+  }
+
+  return payload;
 }
 
 export async function listMyListings(params: {
@@ -142,6 +183,8 @@ export async function updateListingStatus(params: {
   if (redis) {
     await redis.set(cacheKeys.listingDetail(dto.id), JSON.stringify(dto), "EX", 300);
   }
+
+  await invalidateListingListCache();
 
   return { listing: dto };
 }

@@ -1,7 +1,20 @@
 import type { Request, Response } from "express";
 import { fail, ok } from "../../shared/http.js";
-import { getLatestPrice, getPriceHistory, ingestPricesManually, PriceServiceError } from "./price.service.js";
-import { latestPriceQuerySchema, manualIngestSchema, priceHistoryQuerySchema } from "./price.validators.js";
+import {
+  getLatestPrice,
+  getPriceAlerts,
+  getPriceHistory,
+  getRegionalInsights,
+  ingestPricesManually,
+  PriceServiceError
+} from "./price.service.js";
+import {
+  latestPriceQuerySchema,
+  manualIngestSchema,
+  priceAlertsQuerySchema,
+  priceHistoryQuerySchema,
+  priceRegionalInsightsQuerySchema
+} from "./price.validators.js";
 
 export async function getLatestPriceHandler(req: Request, res: Response): Promise<void> {
   const parsed = latestPriceQuerySchema.safeParse(req.query);
@@ -47,6 +60,46 @@ export async function getPriceHistoryHandler(req: Request, res: Response): Promi
     }
 
     res.status(500).json(fail(req.id, "INTERNAL_ERROR", "Failed to fetch price history"));
+  }
+}
+
+export async function getPriceAlertsHandler(req: Request, res: Response): Promise<void> {
+  const parsed = priceAlertsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(422).json(fail(req.id, "VALIDATION_ERROR", parsed.error.message));
+    return;
+  }
+
+  try {
+    const result = await getPriceAlerts(parsed.data);
+    res.status(200).json(ok(req.id, result));
+  } catch (error) {
+    if (error instanceof PriceServiceError && error.code === "MONGO_UNAVAILABLE") {
+      res.status(503).json(fail(req.id, error.code, error.message));
+      return;
+    }
+
+    res.status(500).json(fail(req.id, "INTERNAL_ERROR", "Failed to fetch price alerts"));
+  }
+}
+
+export async function getPriceRegionalInsightsHandler(req: Request, res: Response): Promise<void> {
+  const parsed = priceRegionalInsightsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(422).json(fail(req.id, "VALIDATION_ERROR", parsed.error.message));
+    return;
+  }
+
+  try {
+    const result = await getRegionalInsights(parsed.data);
+    res.status(200).json(ok(req.id, result));
+  } catch (error) {
+    if (error instanceof PriceServiceError && error.code === "MONGO_UNAVAILABLE") {
+      res.status(503).json(fail(req.id, error.code, error.message));
+      return;
+    }
+
+    res.status(500).json(fail(req.id, "INTERNAL_ERROR", "Failed to fetch regional insights"));
   }
 }
 

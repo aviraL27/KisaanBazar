@@ -11,6 +11,18 @@ export const priceHistoryQuerySchema = z.object({
   days: z.coerce.number().int().min(1).max(365).default(7)
 });
 
+export const priceAlertsQuerySchema = z.object({
+  crop: z.string().min(1),
+  mandi: z.string().min(1),
+  days: z.coerce.number().int().min(2).max(365).default(30),
+  zThreshold: z.coerce.number().min(1).max(5).default(1.8)
+});
+
+export const priceRegionalInsightsQuerySchema = z.object({
+  crop: z.string().min(1),
+  days: z.coerce.number().int().min(2).max(365).default(30)
+});
+
 export const manualIngestSchema = z.object({
   prices: z
     .array(

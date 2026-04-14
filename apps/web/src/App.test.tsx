@@ -46,6 +46,8 @@ describe("App shell", () => {
   });
 
   it("shows buyer nav and hides farmer nav when auth role resolves to buyer", async () => {
+    localStorage.setItem("kisaanbazar-dev-session", JSON.stringify({ token: "dev-token", role: "buyer", uid: "buyer_demo" }));
+
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL) => {

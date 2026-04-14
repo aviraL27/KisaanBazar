@@ -1,19 +1,25 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { Link, NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import type {
+  AuthDevLoginResponse,
+  AuthFirebasePasswordLoginResponse,
   AuthMeResponse,
+  AuthModeResponse,
   CreateListingInput,
   CreateListingResponse,
+  HealthDependenciesResponse,
   ListListingsResponse,
   ListMyListingsResponse,
   ListMyOrdersResponse,
   Order,
   OrderStatus,
+  PriceAlertsResponse,
   PlaceOrderInput,
   PlaceOrderResponse,
   PriceHistoryResponse,
   PriceLatestResponse,
+  PriceRegionalInsightsResponse,
   UpdateListingStatusInput,
   UpdateListingStatusResponse,
   UserRole
@@ -23,6 +29,7 @@ import { apiGet, apiPatch, apiPost, type ApiRequestOptions } from "./lib/api";
 interface DevSession {
   token: string;
   role: UserRole;
+  uid: string;
 }
 
 interface AuthState {
@@ -36,7 +43,7 @@ interface AuthState {
 const sessionStorageKey = "kisaanbazar-dev-session";
 
 function readSession(): DevSession {
-  const fallback: DevSession = { token: "dev-token", role: "buyer" };
+  const fallback: DevSession = { token: "", role: "buyer", uid: "buyer_demo" };
   const raw = window.localStorage.getItem(sessionStorageKey);
   if (!raw) {
     return fallback;
@@ -46,9 +53,10 @@ function readSession(): DevSession {
     const parsed = JSON.parse(raw) as Partial<DevSession>;
     if (
       typeof parsed.token === "string" &&
+      typeof parsed.uid === "string" &&
       (parsed.role === "buyer" || parsed.role === "farmer" || parsed.role === "admin")
     ) {
-      return { token: parsed.token, role: parsed.role };
+      return { token: parsed.token, role: parsed.role, uid: parsed.uid };
     }
   } catch {
     return fallback;
@@ -77,6 +85,14 @@ function SessionBar(props: { session: DevSession; onChange: (next: DevSession) =
   return (
     <div className="session-bar">
       <label>
+        User id
+        <input
+          value={session.uid}
+          onChange={(event) => onChange({ ...session, uid: event.target.value })}
+          placeholder="e.g. buyer_raj_01"
+        />
+      </label>
+      <label>
         Bearer token
         <input
           value={session.token}
@@ -85,7 +101,7 @@ function SessionBar(props: { session: DevSession; onChange: (next: DevSession) =
         />
       </label>
       <label>
-        Dev role
+        Session role
         <select
           value={session.role}
           onChange={(event) => onChange({ ...session, role: event.target.value as UserRole })}
@@ -103,7 +119,7 @@ function UserBadge(props: { authState: AuthState; sessionRole: UserRole }) {
   const { authState, sessionRole } = props;
 
   if (!authState.tokenPresent) {
-    return <p className="user-badge warning">Token missing. Protected routes will reject requests.</p>;
+    return <p className="user-badge">Guest mode active. Login to access orders, sell, and listing management.</p>;
   }
 
   if (authState.isLoading) {
@@ -121,7 +137,7 @@ function UserBadge(props: { authState: AuthState; sessionRole: UserRole }) {
   return (
     <p className="user-badge success">
       Signed in as <strong>{authState.user.role}</strong> ({authState.user.uid})
-      {authState.user.role !== sessionRole ? `, dev selector=${sessionRole}` : ""}
+      {authState.user.role !== sessionRole ? `, session role=${sessionRole}` : ""}
     </p>
   );
 }
@@ -191,6 +207,7 @@ function HomePage() {
           Explore active listings, compare mandi pricing, and move from discovery to order with a single workflow.
         </p>
         <div className="cta-row">
+          <Link className="btn btn-primary" to="/login">Login</Link>
           <Link className="btn btn-primary" to="/dashboard">Open dashboard</Link>
           <Link className="btn btn-primary" to="/marketplace">Open marketplace</Link>
           <Link className="btn btn-secondary" to="/prices">View mandi prices</Link>
@@ -214,6 +231,156 @@ function HomePage() {
           <Link className="btn btn-secondary" to="/about">Read platform scope</Link>
         </article>
       </section>
+    </main>
+  );
+}
+
+function LoginPage(props: { session: DevSession; onLogin: (session: DevSession) => void }) {
+  const { session, onLogin } = props;
+  const navigate = useNavigate();
+  const [uid, setUid] = useState(session.uid || "buyer_demo");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState<UserRole>(session.role);
+
+  const modeQuery = useQuery({
+    queryKey: ["auth-mode"],
+    queryFn: async () => apiGet<AuthModeResponse>("/v1/auth/mode"),
+    retry: false
+  });
+
+  const completeLogin = async (token: string, fallbackUid: string, fallbackRole: UserRole) => {
+    const me = await apiGet<AuthMeResponse>("/v1/auth/me", undefined, {
+      token,
+      devRole: fallbackRole,
+      devUid: fallbackUid
+    });
+
+    const nextSession: DevSession = {
+      token,
+      role: me.user.role,
+      uid: me.user.uid
+    };
+
+    onLogin(nextSession);
+    navigate("/dashboard");
+  };
+
+  const devLoginMutation = useMutation({
+    mutationFn: async () =>
+      apiPost<AuthDevLoginResponse, { uid: string; role: UserRole }>("/v1/auth/dev-login", {
+        uid: uid.trim(),
+        role
+      }),
+    onSuccess: async (data) => {
+      await completeLogin(data.token, data.user.uid, data.user.role);
+    }
+  });
+
+  const firebaseLoginMutation = useMutation({
+    mutationFn: async () =>
+      apiPost<AuthFirebasePasswordLoginResponse, { email: string; password: string }>(
+        "/v1/auth/firebase/password-login",
+        {
+          email: email.trim(),
+          password
+        }
+      ),
+    onSuccess: async (data) => {
+      await completeLogin(data.token, data.uid, role);
+    }
+  });
+
+  const isFirebaseMode = modeQuery.data?.firebaseAuthEnforced ?? false;
+  const loginError = (firebaseLoginMutation.error ?? devLoginMutation.error) as Error | null;
+
+  return (
+    <main className="page">
+      <section className="hero hero-home">
+        <p className="eyebrow">Sign in</p>
+        <h1>Access your KisaanBazaar dashboard</h1>
+        <p className="subtitle">
+          {isFirebaseMode
+            ? "Firebase auth is enforced. Sign in with your real Firebase account credentials."
+            : "Use a buyer, farmer, or admin role to enter the live marketplace workspace."}
+        </p>
+      </section>
+
+      {modeQuery.isLoading && <p className="status">Loading auth mode...</p>}
+      {modeQuery.isError && <p className="status error">{(modeQuery.error as Error).message}</p>}
+
+      <form
+        className="card login-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (isFirebaseMode) {
+            firebaseLoginMutation.mutate();
+            return;
+          }
+
+          devLoginMutation.mutate();
+        }}
+      >
+        {isFirebaseMode ? (
+          <>
+            <label>
+              Email
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="your-firebase-user@email.com"
+                required
+              />
+            </label>
+            <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="firebase password"
+                required
+              />
+            </label>
+          </>
+        ) : (
+          <label>
+            User ID
+            <input
+              value={uid}
+              onChange={(event) => setUid(event.target.value)}
+              placeholder="e.g. farmer_mahesh_01"
+              required
+            />
+          </label>
+        )}
+        <label>
+          Session role
+          <select value={role} onChange={(event) => setRole(event.target.value as UserRole)}>
+            <option value="buyer">Buyer</option>
+            <option value="farmer">Farmer</option>
+            <option value="admin">Admin</option>
+          </select>
+        </label>
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={
+            modeQuery.isLoading ||
+            devLoginMutation.isPending ||
+            firebaseLoginMutation.isPending ||
+            (isFirebaseMode ? email.trim().length < 5 || password.length < 6 : uid.trim().length < 3)
+          }
+        >
+          {devLoginMutation.isPending || firebaseLoginMutation.isPending ? "Signing in..." : "Login"}
+        </button>
+      </form>
+
+      {isFirebaseMode && modeQuery.data && !modeQuery.data.firebasePasswordLoginEnabled && (
+        <p className="status error">Firebase password login is not enabled on API. Add FIREBASE_WEB_API_KEY in API env.</p>
+      )}
+      {loginError && <p className="status error">{loginError.message}</p>}
     </main>
   );
 }
@@ -247,6 +414,11 @@ function DashboardPage(props: { auth: ApiRequestOptions; authState: AuthState })
     enabled: role === "farmer" || role === "admin"
   });
 
+  const depsQuery = useQuery({
+    queryKey: ["health-dependencies"],
+    queryFn: async () => apiGet<HealthDependenciesResponse>("/v1/health/dependencies")
+  });
+
   const activeCount = listingsQuery.data?.listings.length ?? 0;
   const myOrdersCount = myOrdersQuery.data?.count ?? 0;
   const myListingsCount = myListingsQuery.data?.count ?? 0;
@@ -278,6 +450,17 @@ function DashboardPage(props: { auth: ApiRequestOptions; authState: AuthState })
           <p className="metric-value">{role === "farmer" || role === "admin" ? soldOutCount : "-"}</p>
         </article>
       </section>
+
+      {depsQuery.data && (
+        <section className="card dependency-card">
+          <h2>Infrastructure status</h2>
+          <div className="dependency-grid">
+            <p>MongoDB: <strong>{depsQuery.data.mongoConnected ? "connected" : "disconnected"}</strong></p>
+            <p>Redis: <strong>{depsQuery.data.redisConnected ? "connected" : "disconnected"}</strong></p>
+            <p>Cache round trip: <strong>{depsQuery.data.cacheRoundTripOk ? "ok" : "failed"}</strong></p>
+          </div>
+        </section>
+      )}
 
       <section className="grid dashboard-grid">
         <article className="card">
@@ -844,6 +1027,18 @@ function PricesPage() {
     queryFn: async () => apiGet<PriceHistoryResponse>("/v1/prices/history", { crop, mandi, days })
   });
 
+  const alertsQuery = useQuery({
+    queryKey: ["price-alerts", crop, mandi, days],
+    enabled,
+    queryFn: async () => apiGet<PriceAlertsResponse>("/v1/prices/alerts", { crop, mandi, days })
+  });
+
+  const insightsQuery = useQuery({
+    queryKey: ["price-insights-regions", crop, days],
+    enabled: crop.trim().length > 0,
+    queryFn: async () => apiGet<PriceRegionalInsightsResponse>("/v1/prices/insights/regions", { crop, days })
+  });
+
   const minMax = useMemo(() => {
     const points = historyQuery.data?.points ?? [];
     if (points.length === 0) {
@@ -907,6 +1102,62 @@ function PricesPage() {
           </article>
         </section>
       )}
+
+      {alertsQuery.data && (
+        <section className="card alerts-card">
+          <h2>Anomaly alerts ({alertsQuery.data.alerts.length})</h2>
+          <p className="muted">
+            Baseline modal for {alertsQuery.data.days} days: Rs.{alertsQuery.data.windowAvg}
+          </p>
+          {alertsQuery.data.alerts.length === 0 && <p className="status">No strong anomalies in the selected window.</p>}
+          {alertsQuery.data.alerts.length > 0 && (
+            <ul className="simple-list">
+              {alertsQuery.data.alerts.slice(0, 6).map((alert) => (
+                <li key={`${alert.ts}-${alert.modalPrice}`}>
+                  {formatDate(alert.ts)}: Rs.{alert.modalPrice} ({alert.deviationPct}% vs baseline, {alert.severity})
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {insightsQuery.data && (
+        <section className="card regional-insights-card">
+          <h2>Regional insights</h2>
+          {insightsQuery.data.regions.length === 0 && <p className="status">No regional records found for this crop.</p>}
+          {insightsQuery.data.regions.length > 0 && (
+            <div className="regional-table-wrap">
+              <table className="regional-table">
+                <thead>
+                  <tr>
+                    <th>State</th>
+                    <th>Mandis</th>
+                    <th>Avg latest</th>
+                    <th>Min</th>
+                    <th>Max</th>
+                    <th>Volatility %</th>
+                    <th>Trend</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {insightsQuery.data.regions.map((region) => (
+                    <tr key={region.state}>
+                      <td>{region.state}</td>
+                      <td>{region.mandiCount}</td>
+                      <td>Rs.{region.latestModalPriceAvg}</td>
+                      <td>Rs.{region.latestModalPriceMin}</td>
+                      <td>Rs.{region.latestModalPriceMax}</td>
+                      <td>{region.sevenDayVolatilityPct}</td>
+                      <td>{region.trend}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
     </main>
   );
 }
@@ -937,7 +1188,7 @@ function NotFoundPage() {
 function AppFooter(props: { authState: AuthState }) {
   const { authState } = props;
   const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || "http://localhost:4000";
-  const authLabel = authState.user ? `${authState.user.role}:${authState.user.uid}` : "guest";
+  const authLabel = authState.user ? `${authState.user.uid} (${authState.user.role})` : "guest";
 
   return (
     <footer className="app-footer">
@@ -954,7 +1205,8 @@ export function App() {
   const [session, setSession] = useState<DevSession>(() => readSession());
   const auth = useMemo<ApiRequestOptions>(() => {
     const token = session.token.trim();
-    return token ? { token, devRole: session.role } : { devRole: session.role };
+    const devUid = session.uid.trim();
+    return token ? { token, devRole: session.role, devUid } : { devRole: session.role, devUid };
   }, [session]);
 
   const meQuery = useQuery({
@@ -974,25 +1226,38 @@ export function App() {
 
   const navRole = authState.user?.role;
 
+  const persistSession = (next: DevSession) => {
+    setSession(next);
+    writeSession(next);
+  };
+
+  const clearSession = () => {
+    const empty: DevSession = { token: "", role: "buyer", uid: "buyer_demo" };
+    persistSession(empty);
+  };
+
   return (
     <>
       <header className="topbar">
         <nav>
           <NavLink to="/dashboard">Dashboard</NavLink>
           <NavLink to="/">Home</NavLink>
+          {!auth.token && <NavLink to="/login">Login</NavLink>}
           <NavLink to="/marketplace">Marketplace</NavLink>
           {(navRole === "buyer" || navRole === "admin") && <NavLink to="/orders">Orders</NavLink>}
           {(navRole === "farmer" || navRole === "admin") && <NavLink to="/sell">Sell</NavLink>}
           {(navRole === "farmer" || navRole === "admin") && <NavLink to="/farmer/listings">My Listings</NavLink>}
           <NavLink to="/prices">Prices</NavLink>
           <NavLink to="/about">About</NavLink>
+          {auth.token && (
+            <button type="button" className="btn btn-secondary logout-btn" onClick={clearSession}>
+              Logout
+            </button>
+          )}
         </nav>
         <SessionBar
           session={session}
-          onChange={(next) => {
-            setSession(next);
-            writeSession(next);
-          }}
+          onChange={persistSession}
         />
         <div className="identity-row">
           <UserBadge authState={authState} sessionRole={session.role} />
@@ -1001,6 +1266,7 @@ export function App() {
       <Routes>
         <Route path="/dashboard" element={<DashboardPage auth={auth} authState={authState} />} />
         <Route path="/" element={<HomePage />} />
+        <Route path="/login" element={<LoginPage session={session} onLogin={persistSession} />} />
         <Route path="/marketplace" element={<MarketplacePage auth={auth} />} />
         <Route
           path="/orders"

@@ -1,3 +1,51 @@
+export interface AuthDevLoginInput {
+  role: UserRole;
+  uid: string;
+}
+
+export interface AuthDevLoginResponse {
+  token: string;
+  user: AuthenticatedUser;
+}
+export interface HealthDependenciesResponse {
+  mongoConnected: boolean;
+  redisConnected: boolean;
+  cacheRoundTripOk: boolean;
+}
+export interface PriceAnomaly {
+  ts: string;
+  modalPrice: number;
+  baselinePrice: number;
+  zScore: number;
+  deviationPct: number;
+  severity: "medium" | "high";
+}
+
+export interface PriceAlertsResponse {
+  crop: string;
+  mandi: string;
+  days: number;
+  latest?: PricePoint;
+  windowAvg: number;
+  alerts: PriceAnomaly[];
+}
+
+export interface RegionalPriceInsight {
+  state: string;
+  mandiCount: number;
+  latestModalPriceAvg: number;
+  latestModalPriceMin: number;
+  latestModalPriceMax: number;
+  sevenDayVolatilityPct: number;
+  trend: "up" | "down" | "stable";
+}
+
+export interface PriceRegionalInsightsResponse {
+  crop: string;
+  days: number;
+  generatedAt: string;
+  regions: RegionalPriceInsight[];
+}
 export type UserRole = "farmer" | "buyer" | "admin";
 
 export interface ApiSuccess<T> {
@@ -29,6 +77,22 @@ export interface AuthenticatedUser {
 
 export interface AuthMeResponse {
   user: AuthenticatedUser;
+}
+
+export interface AuthModeResponse {
+  firebaseAuthEnforced: boolean;
+  firebasePasswordLoginEnabled: boolean;
+}
+
+export interface AuthFirebasePasswordLoginInput {
+  email: string;
+  password: string;
+}
+
+export interface AuthFirebasePasswordLoginResponse {
+  token: string;
+  uid: string;
+  expiresInSec: number;
 }
 
 export type QualityGrade = "A" | "B" | "C";
